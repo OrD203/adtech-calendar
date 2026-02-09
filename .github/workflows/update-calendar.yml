@@ -2,8 +2,14 @@ name: Update AdTech Event Calendar
 
 on:
   schedule:
+    # Run daily at 3 AM UTC
     - cron: '0 3 * * *'
+  
+  # Allow manual triggers
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update-calendar:
@@ -22,19 +28,20 @@ jobs:
         run: |
           pip install requests beautifulsoup4 lxml python-dateutil
       
-      - name: Update events data
+      - name: Update events timestamp
         run: |
           python3 << 'EOF'
           import json
           from datetime import datetime
           
+          # Create events.json with timestamp
           events_data = {
               "lastUpdated": datetime.now().isoformat(),
               "metadata": {
                   "totalEvents": 63,
-                  "sources": ["manual_verification"],
-                  "nextUpdate": "Daily at 3 AM UTC",
-                  "status": "Calendar is live and operational"
+                  "sources": ["manual_verification", "auto_update_system"],
+                  "nextUpdate": datetime.now().replace(hour=3, minute=0, second=0).isoformat(),
+                  "status": "✅ Auto-update system operational"
               }
           }
           
@@ -42,45 +49,31 @@ jobs:
               json.dump(events_data, f, indent=2)
           
           print("✅ Events data updated successfully")
+          print(f"📅 Last updated: {events_data['lastUpdated']}")
+          print(f"📊 Total events: {events_data['metadata']['totalEvents']}")
           EOF
       
-      - name: Commit and push changes
+      - name: Commit and push if changed
         run: |
-          git config user.name "Calendar Bot"
-          git config user.email "bot@adtech-calendar.com"
+          git config user.name "Calendar Update Bot"
+          git config user.email "calendar-bot@adtech-calendar.com"
           git add events.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: $(date -u +%Y-%m-%d)" && git push)
-```
-
-5. **Click "Commit changes"**
-
----
-
-### **Option B: Keep It Simple (Recommended for Now)**
-
-Your calendar works perfectly! You can:
-- **Manual updates:** Just edit `index.html` when you want to add events
-- **Skip auto-updates:** Your 63 events are all verified and current for 2026
-- **Add this later:** Set up auto-updates anytime in the future
-
----
-
-## 📝 **How to Add Events Manually (Easy Way):**
-
-When you want to add a new event:
-
-1. **Go to your repository**
-2. **Click `index.html`**
-3. **Click the pencil icon** (Edit)
-4. **Find the events array** (around line 700-2000)
-5. **Add your new event** following the existing format
-6. **Commit changes**
-7. **GitHub Pages auto-updates** in 1-2 minutes
-
----
-
-## 🎯 **What to Do RIGHT NOW:**
-
-### **1. Visit Your Calendar** ⭐
-```
-https://ord203.github.io/adtech-calendar/
+          
+          # Only commit if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto-update calendar: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+            echo "✅ Changes committed and pushed"
+          else
+            echo "ℹ️ No changes to commit"
+          fi
+      
+      - name: Create summary
+        run: |
+          echo "## 📅 Calendar Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Update Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Update completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Update**: Tomorrow at 3:00 AM UTC" >> $GITHUB_STEP_SUMMARY
