@@ -1,0 +1,27 @@
+[
+  {
+    "name": "NRF Retail's Big Show",
+    "dates": "Jan 11-13",
+    "month": "January",
+    "location": "New York, USA",
+    "region": "North America",
+    "tier": 1,
+    "score": 95,
+    "audiences": ["Retailers", "E-commerce", "Ad Tech", "CPG Brands"],
+    "focus": ["Retail media", "Store innovation", "Supply chain", "CX"],
+    "cost": "$500-3,700 USD",
+    "competitors": ["Taboola", "RevContent", "MGID", "Newsbreak"],
+    "podcast": true,
+    "confirmed": true,
+    "autoUpdate": false,
+    "why": "World's largest retail event with 37K+ attendees setting industry trends",
+    "website": "https://nrfbigshow.nrf.com",
+    "scoreBreakdown": {
+      "audience": 30,
+      "decisionMaker": 25,
+      "competitive": 20,
+      "commercial": 15,
+      "influence": 5
+    }
+  }
+]
