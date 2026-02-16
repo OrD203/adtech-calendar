@@ -62,13 +62,23 @@ def merge_events():
     """Merge discovered events with existing calendar events"""
     print("🔄 Merging events from all sources...")
     
+    # Ensure data directory exists
+    import os
+    os.makedirs('data', exist_ok=True)
+    
     # Load discovered events
     discovered = load_json('data/discovered_events.json')
     print(f"  📊 Discovered events: {len(discovered)}")
     
     # Load Google Sheets events (if available)
     sheets_events = load_json('data/events.json')
-    print(f"  📊 Google Sheets events: {len(sheets_events)}")
+    
+    # If no existing events.json, initialize with empty list
+    if not sheets_events:
+        print(f"  📊 Google Sheets events: 0 (initializing)")
+        sheets_events = []
+    else:
+        print(f"  📊 Google Sheets events: {len(sheets_events)}")
     
     # Load current calendar events (extract from index.html)
     current_events = extract_current_events()
