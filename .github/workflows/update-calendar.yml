@@ -1,79 +1,84 @@
-name: Update AdTech Event Calendar
+name: Auto-Discover and Update Calendar Events
 
 on:
   schedule:
-    # Run daily at 3 AM UTC
-    - cron: '0 3 * * *'
-  
-  # Allow manual triggers
-  workflow_dispatch:
-
-permissions:
-  contents: write
+    # Runs every day at 6:00 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
-  update-calendar:
+  discover-and-update:
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 lxml python-dateutil
+          python -m pip install --upgrade pip
+          pip install beautifulsoup4 requests lxml gspread oauth2client
       
-      - name: Update events timestamp
+      - name: Discover new events from web
+        env:
+          GOOGLE_SEARCH_API_KEY: ${{ secrets.GOOGLE_SEARCH_API_KEY }}
+          GOOGLE_SEARCH_CX: ${{ secrets.GOOGLE_SEARCH_CX }}
         run: |
-          python3 << 'EOF'
-          import json
-          from datetime import datetime
-          
-          # Create events.json with timestamp
-          events_data = {
-              "lastUpdated": datetime.now().isoformat(),
-              "metadata": {
-                  "totalEvents": 63,
-                  "sources": ["manual_verification", "auto_update_system"],
-                  "nextUpdate": datetime.now().replace(hour=3, minute=0, second=0).isoformat(),
-                  "status": "✅ Auto-update system operational"
-              }
-          }
-          
-          with open('events.json', 'w') as f:
-              json.dump(events_data, f, indent=2)
-          
-          print("✅ Events data updated successfully")
-          print(f"📅 Last updated: {events_data['lastUpdated']}")
-          print(f"📊 Total events: {events_data['metadata']['totalEvents']}")
-          EOF
+          python scripts/discover_events.py
       
-      - name: Commit and push if changed
+      - name: Merge with existing events
         run: |
-          git config user.name "Calendar Update Bot"
-          git config user.email "calendar-bot@adtech-calendar.com"
-          git add events.json
-          
-          # Only commit if there are changes
-          if ! git diff --staged --quiet; then
-            git commit -m "Auto-update calendar: $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
-            echo "✅ Changes committed and pushed"
+          python scripts/merge_events.py
+      
+      - name: Fetch events from Google Sheets (if configured)
+        env:
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: |
+          if [ -n "$GOOGLE_SHEETS_CREDENTIALS" ] && [ -n "$SHEET_ID" ]; then
+            python scripts/fetch_events.py || echo "Google Sheets not configured, skipping"
           else
-            echo "ℹ️ No changes to commit"
+            echo "Google Sheets not configured, using discovered events only"
           fi
       
-      - name: Create summary
+      - name: Update calendar HTML
         run: |
-          echo "## 📅 Calendar Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Update Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status**: ✅ Update completed successfully" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Next Update**: Tomorrow at 3:00 AM UTC" >> $GITHUB_STEP_SUMMARY
+          python scripts/update_calendar.py
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet index.html; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and push if changed
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add index.html data/
+          git commit -m "🤖 Auto-update: Discovered new events and synced calendar"
+          git push
+      
+      - name: Report status
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          echo "✅ Calendar updated with new events!"
+          if [ -f data/discovered_events.json ]; then
+            COUNT=$(python -c "import json; print(len(json.load(open('data/discovered_events.json'))))")
+            echo "📊 Discovered $COUNT new events"
+          fi
+      
+      - name: No changes
+        if: steps.check_changes.outputs.changed == 'false'
+        run: echo "ℹ️ No changes detected - calendar is up to date"
